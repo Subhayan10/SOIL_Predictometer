@@ -2,62 +2,67 @@ from flask import Flask, request, jsonify
 import tensorflow as tf
 from tensorflow.keras.preprocessing import image
 import numpy as np
-from PIL import Image, UnidentifiedImageError
-import io
 import os
 
 # Initialize Flask app
 app = Flask(__name__)
 
 # Load model
-MODEL_PATH = 'Soil_MobileNetV2.h5'
+MODEL_PATH = "model/Soil_MobileNetV2.keras"
 model = tf.keras.models.load_model(MODEL_PATH)
 
-# Define your classes (same order as during training)
-class_names = ['Alluvial_Soil', 'Arid_Soil', 'Black_Soil', 'Laterite_Soil', 'Mountain_Soil', 'Red_Soil', 'Yellow_Soil']
+# Define soil-to-plant mapping (you can edit or extend this)
+plant_recommendations = {
+     
+    "Alluvial_Soil": ["Rice", "Wheat", "Sugarcane", "Maize", "Pulses", "Jute"],
+    "Arid_Soil": ["Millets", "Barley", "Cotton", "Dates", "Cactus", "Mustard"],
+    "Black_Soil": ["Cotton", "Soybean", "Sunflower", "Tobacco", "Citrus Fruits"],
+    "Laterite_Soil": ["Tea", "Coffee", "Cashew", "Coconut", "Rubber"],
+    "Mountain_Soil": ["Apples", "Barley", "Tea", "Maize", "Fruits and Vegetables"],
+    "Red_Soil": ["Groundnut", "Potato", "Millets", "Pulses", "Cotton"],
+    "Yellow_Soil": ["Maize", "Peas", "Groundnut", "Paddy", "Vegetables"]
+
+}
+
+# Classes (should match your model’s training classes)
+class_labels = list(plant_recommendations.keys())
 
 @app.route('/')
 def home():
-    return jsonify({"message": "Soil classification API is running!"})
+    return "🌱 Soil Classification API is Running!"
 
 @app.route('/predict', methods=['POST'])
 def predict():
-    # Ensure file is in the request
-    if 'file' not in request.files:
-        return jsonify({'error': 'No file provided. Please send an image file with key "file".'}), 400
-
-    file = request.files['file']
-
-    if file.filename == '':
-        return jsonify({'error': 'No file selected for uploading'}), 400
-
     try:
-        # Read image safely
-        img_bytes = file.read()
-        img = Image.open(io.BytesIO(img_bytes)).convert('RGB')
-        img = img.resize((224, 224))
+        if 'image' not in request.files:
+            return jsonify({'error': 'No image uploaded'}), 400
 
-        # Convert to model input format
-        img_array = image.img_to_array(img)
-        img_array = np.expand_dims(img_array, axis=0) / 255.0
+        file = request.files['image']
+        file_path = os.path.join("uploads", file.filename)
+        os.makedirs("uploads", exist_ok=True)
+        file.save(file_path)
+
+        # Load and preprocess the image
+        img = image.load_img(file_path, target_size=(224, 224))
+        img_array = image.img_to_array(img) / 255.0
+        img_array = np.expand_dims(img_array, axis=0)
 
         # Predict
-        preds = model.predict(img_array)
-        pred_index = np.argmax(preds)
-        pred_class = class_names[pred_index]
-        confidence = float(np.max(preds) * 100)
+        predictions = model.predict(img_array)
+        predicted_index = np.argmax(predictions[0])
+        predicted_class = class_labels[predicted_index]
+
+        # Recommended plants
+        plants = plant_recommendations.get(predicted_class, [])
 
         return jsonify({
-            'prediction': pred_class,
-            'confidence': confidence
+            'predicted_soil': predicted_class,
+            'recommended_plants': plants
         })
 
-    except UnidentifiedImageError:
-        return jsonify({'error': 'Uploaded file is not a valid image.'}), 400
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
 
-if __name__ == '__main__':
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host='0.0.0.0', port=port)
+if __name__ == "__main__":
+    app.run(debug=True)
