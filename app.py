@@ -9,7 +9,8 @@ app = Flask(__name__)
 
 # Load model
 MODEL_PATH = "model/Soil_MobileNetV2.keras"
-model = tf.keras.models.load_model(MODEL_PATH)
+# model = tf.keras.models.load_model(MODEL_PATH)
+model = tf.keras.models.load_model(MODEL_PATH, safe_mode=False, compile=False)
 
 # Define soil-to-plant mapping (you can edit or extend this)
 plant_recommendations = {
@@ -66,3 +67,4 @@ def predict():
 
 if __name__ == "__main__":
     app.run(debug=True)
+
